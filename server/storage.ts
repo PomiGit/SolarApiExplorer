@@ -1,6 +1,6 @@
-import { planets, restConcepts, users, progress, type Planet, type InsertPlanet, type RestConcept, type InsertRestConcept, type User, type InsertUser, type Progress, type InsertProgress } from "@shared/schema";
+import { planets, restConcepts, users, progress, quizQuestions, quizAttempts, type Planet, type InsertPlanet, type RestConcept, type InsertRestConcept, type User, type InsertUser, type Progress, type InsertProgress, type QuizQuestion, type InsertQuizQuestion, type QuizAttempt, type InsertQuizAttempt } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 export interface IStorage {
@@ -24,6 +24,13 @@ export interface IStorage {
   getProgress(userId: number): Promise<Progress[]>;
   updateProgress(userId: number, conceptId: number, data: Partial<InsertProgress>): Promise<Progress>;
   getProgressByConceptId(userId: number, conceptId: number): Promise<Progress | undefined>;
+
+  // New quiz operations
+  getQuizQuestions(conceptId: number): Promise<QuizQuestion[]>;
+  getQuizQuestion(id: number): Promise<QuizQuestion | undefined>;
+  createQuizQuestion(question: InsertQuizQuestion): Promise<QuizQuestion>;
+  submitQuizAttempt(attempt: InsertQuizAttempt): Promise<QuizAttempt>;
+  getUserQuizAttempts(userId: number, conceptId: number): Promise<QuizAttempt[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -130,6 +137,52 @@ export class DatabaseStorage implements IStorage {
       .where(eq(progress.userId, userId))
       .where(eq(progress.conceptId, conceptId));
     return userProgress;
+  }
+
+  async getQuizQuestions(conceptId: number): Promise<QuizQuestion[]> {
+    return await db
+      .select()
+      .from(quizQuestions)
+      .where(eq(quizQuestions.conceptId, conceptId));
+  }
+
+  async getQuizQuestion(id: number): Promise<QuizQuestion | undefined> {
+    const [question] = await db
+      .select()
+      .from(quizQuestions)
+      .where(eq(quizQuestions.id, id));
+    return question;
+  }
+
+  async createQuizQuestion(question: InsertQuizQuestion): Promise<QuizQuestion> {
+    const [newQuestion] = await db
+      .insert(quizQuestions)
+      .values(question)
+      .returning();
+    return newQuestion;
+  }
+
+  async submitQuizAttempt(attempt: InsertQuizAttempt): Promise<QuizAttempt> {
+    const [newAttempt] = await db
+      .insert(quizAttempts)
+      .values(attempt)
+      .returning();
+    return newAttempt;
+  }
+
+  async getUserQuizAttempts(userId: number, conceptId: number): Promise<QuizAttempt[]> {
+    const questions = await this.getQuizQuestions(conceptId);
+    const questionIds = questions.map(q => q.id);
+
+    return await db
+      .select()
+      .from(quizAttempts)
+      .where(
+        and(
+          eq(quizAttempts.userId, userId),
+          quizAttempts.questionId.in(questionIds)
+        )
+      );
   }
 }
 

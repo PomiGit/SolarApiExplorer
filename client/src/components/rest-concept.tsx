@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, Circle, PlayCircle } from "lucide-react";
+import { CheckCircle, Circle, PlayCircle, Brain } from "lucide-react";
 import { TutorialModal } from "./tutorial-modal";
+import { QuizModal } from "./quiz-modal";
 
 interface RestConceptCardProps {
   concept: RestConcept;
@@ -25,6 +26,7 @@ export default function RestConceptCard({ concept }: RestConceptCardProps) {
   const { toast } = useToast();
   const [notes, setNotes] = useState("");
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
 
   const { data: progress } = useQuery<Progress>({
     queryKey: [`/api/progress/${concept.id}`],
@@ -72,6 +74,15 @@ export default function RestConceptCard({ concept }: RestConceptCardProps) {
     });
   };
 
+  const handleQuizComplete = () => {
+    if (!user) return;
+    updateProgress.mutate({ completed: true });
+    toast({
+      title: "Quiz Completed",
+      description: `You've completed the ${concept.method} quiz!`,
+    });
+  };
+
   return (
     <>
       <Card className="bg-black/30 border-accent">
@@ -95,6 +106,15 @@ export default function RestConceptCard({ concept }: RestConceptCardProps) {
               {concept.title}
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowQuiz(true)}
+                className="flex items-center gap-1"
+              >
+                <Brain className="h-4 w-4" />
+                Take Quiz
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -150,6 +170,13 @@ export default function RestConceptCard({ concept }: RestConceptCardProps) {
         isOpen={showTutorial}
         onClose={() => setShowTutorial(false)}
         onComplete={handleTutorialComplete}
+      />
+
+      <QuizModal
+        concept={concept}
+        isOpen={showQuiz}
+        onClose={() => setShowQuiz(false)}
+        onComplete={handleQuizComplete}
       />
     </>
   );

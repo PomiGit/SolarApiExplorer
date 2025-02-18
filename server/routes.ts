@@ -1,7 +1,7 @@
 import { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertPlanetSchema, insertUserSchema, insertProgressSchema } from "@shared/schema";
+import { insertPlanetSchema, insertUserSchema, insertProgressSchema, insertQuizQuestionSchema, insertQuizAttemptSchema } from "@shared/schema";
 import passport from "passport";
 import { ensureAuthenticated } from "./auth";
 
@@ -94,7 +94,6 @@ export async function registerRoutes(app: Express) {
     });
   });
 
-  // Add this route to the existing routes in the file
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -138,6 +137,68 @@ export async function registerRoutes(app: Express) {
   app.get("/api/concepts", async (_req, res) => {
     const concepts = await storage.getRestConcepts();
     res.json(concepts);
+  });
+
+  // Quiz routes
+  app.get("/api/concepts/:conceptId/quiz", ensureAuthenticated, async (req, res) => {
+    const conceptId = Number(req.params.conceptId);
+    const questions = await storage.getQuizQuestions(conceptId);
+
+    // Remove correct answer from response to prevent cheating
+    const sanitizedQuestions = questions.map(({ correctAnswer, ...rest }) => rest);
+    res.json(sanitizedQuestions);
+  });
+
+  app.post("/api/quiz/submit", ensureAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    const parsed = insertQuizAttemptSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid quiz attempt data" });
+    }
+
+    const question = await storage.getQuizQuestion(parsed.data.questionId);
+    if (!question) {
+      return res.status(404).json({ message: "Question not found" });
+    }
+
+    const isCorrect = parsed.data.selectedAnswer === question.correctAnswer;
+    const attempt = await storage.submitQuizAttempt({
+      ...parsed.data,
+      userId: user.id,
+      isCorrect,
+    });
+
+    res.json({
+      ...attempt,
+      correctAnswer: question.correctAnswer,
+      explanation: question.explanation,
+    });
+  });
+
+  app.get("/api/concepts/:conceptId/quiz/progress", ensureAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    const conceptId = Number(req.params.conceptId);
+    const attempts = await storage.getUserQuizAttempts(user.id, conceptId);
+
+    const stats = {
+      totalAttempts: attempts.length,
+      correctAttempts: attempts.filter(a => a.isCorrect).length,
+    };
+
+    res.json(stats);
+  });
+
+  // Admin route to create quiz questions
+  app.post("/api/quiz/questions", ensureAuthenticated, async (req, res) => {
+    const parsed = insertQuizQuestionSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid question data" });
+    }
+
+    const question = await storage.createQuizQuestion(parsed.data);
+    res.status(201).json(question);
   });
 
   const httpServer = createServer(app);
