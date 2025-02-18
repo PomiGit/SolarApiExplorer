@@ -20,14 +20,14 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { data } = useQuery<User | null>({
-    queryKey: ["/api/auth/me"],
+    queryKey: ["/api/user"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
   const user = data || null;
 
   const login = async (username: string, password: string) => {
     await apiRequest("POST", "/api/auth/login", { username, password });
-    await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
   };
 
   const register = async (username: string, email: string, password: string) => {
@@ -36,7 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     await apiRequest("POST", "/api/auth/logout", {});
-    await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
   };
 
   const value: AuthContextType = {

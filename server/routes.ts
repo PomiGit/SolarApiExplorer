@@ -94,6 +94,21 @@ export async function registerRoutes(app: Express) {
     });
   });
 
+  // Add this route to the existing routes in the file
+  app.get("/api/user", (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = req.user as any;
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      createdAt: user.createdAt,
+    });
+  });
+
+
   // Progress tracking routes
   app.get("/api/progress", ensureAuthenticated, async (req, res) => {
     const user = req.user as any;
