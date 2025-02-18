@@ -1,13 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryClient, apiRequest, getQueryFn } from "./queryClient";
-
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  createdAt: string;
-}
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "./queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { User } from "@shared/schema";
 
 interface AuthContextType {
   user: User | null;
@@ -19,28 +14,41 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { data } = useQuery<User | null>({
+  const { toast } = useToast();
+  const { data: user, refetch } = useQuery<User | null>({
     queryKey: ["/api/user"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/user", { credentials: "include" });
+        if (res.status === 401) return null;
+        if (!res.ok) throw new Error("Failed to fetch user");
+        return res.json();
+      } catch (error) {
+        return null;
+      }
+    },
   });
-  const user = data || null;
 
   const login = async (username: string, password: string) => {
     await apiRequest("POST", "/api/auth/login", { username, password });
-    await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    await refetch();
   };
 
   const register = async (username: string, email: string, password: string) => {
     await apiRequest("POST", "/api/auth/register", { username, email, password });
+    toast({
+      title: "Registration successful",
+      description: "Please log in with your credentials",
+    });
   };
 
   const logout = async () => {
     await apiRequest("POST", "/api/auth/logout", {});
-    await queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+    await refetch();
   };
 
-  const value: AuthContextType = {
-    user,
+  const value = {
+    user: user || null,
     login,
     register,
     logout,
