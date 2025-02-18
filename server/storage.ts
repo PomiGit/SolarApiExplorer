@@ -1,6 +1,7 @@
-import { planets, restConcepts, type Planet, type InsertPlanet, type RestConcept, type InsertRestConcept } from "@shared/schema";
+import { planets, restConcepts, users, progress, type Planet, type InsertPlanet, type RestConcept, type InsertRestConcept, type User, type InsertUser, type Progress, type InsertProgress } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 export interface IStorage {
   // Planet operations
@@ -13,6 +14,16 @@ export interface IStorage {
   // REST Concepts
   getRestConcepts(): Promise<RestConcept[]>;
   getRestConcept(id: number): Promise<RestConcept | undefined>;
+
+  // User operations
+  createUser(data: InsertUser & { password: string }): Promise<User>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserById(id: number): Promise<User | undefined>;
+
+  // Progress operations
+  getProgress(userId: number): Promise<Progress[]>;
+  updateProgress(userId: number, conceptId: number, data: Partial<InsertProgress>): Promise<Progress>;
+  getProgressByConceptId(userId: number, conceptId: number): Promise<Progress | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -54,6 +65,71 @@ export class DatabaseStorage implements IStorage {
   async getRestConcept(id: number): Promise<RestConcept | undefined> {
     const [concept] = await db.select().from(restConcepts).where(eq(restConcepts.id, id));
     return concept;
+  }
+
+  async createUser(data: InsertUser & { password: string }): Promise<User> {
+    const { password, ...userData } = data;
+    const passwordHash = await bcrypt.hash(password, 10);
+    const [user] = await db
+      .insert(users)
+      .values({ ...userData, passwordHash })
+      .returning();
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username));
+    return user;
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id));
+    return user;
+  }
+
+  async getProgress(userId: number): Promise<Progress[]> {
+    return await db
+      .select()
+      .from(progress)
+      .where(eq(progress.userId, userId));
+  }
+
+  async updateProgress(userId: number, conceptId: number, data: Partial<InsertProgress>): Promise<Progress> {
+    const existing = await this.getProgressByConceptId(userId, conceptId);
+    if (existing) {
+      const [updated] = await db
+        .update(progress)
+        .set({ ...data, completedAt: data.completed ? new Date() : null })
+        .where(eq(progress.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [newProgress] = await db
+        .insert(progress)
+        .values({
+          userId,
+          conceptId,
+          ...data,
+          completedAt: data.completed ? new Date() : null,
+        })
+        .returning();
+      return newProgress;
+    }
+  }
+
+  async getProgressByConceptId(userId: number, conceptId: number): Promise<Progress | undefined> {
+    const [userProgress] = await db
+      .select()
+      .from(progress)
+      .where(eq(progress.userId, userId))
+      .where(eq(progress.conceptId, conceptId));
+    return userProgress;
   }
 }
 

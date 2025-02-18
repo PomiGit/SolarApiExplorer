@@ -1,7 +1,9 @@
 import { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertPlanetSchema } from "@shared/schema";
+import { insertPlanetSchema, insertUserSchema, insertProgressSchema } from "@shared/schema";
+import passport from "passport";
+import { ensureAuthenticated } from "./auth";
 
 export async function registerRoutes(app: Express) {
   // Get all planets
@@ -49,6 +51,72 @@ export async function registerRoutes(app: Express) {
       return res.status(404).json({ message: "Planet not found" });
     }
     res.status(204).send();
+  });
+
+  // Authentication routes
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const parsed = insertUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid user data" });
+      }
+
+      const existingUser = await storage.getUserByUsername(parsed.data.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+
+      const user = await storage.createUser(parsed.data);
+      res.status(201).json({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        createdAt: user.createdAt,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error creating user" });
+    }
+  });
+
+  app.post("/api/auth/login", passport.authenticate("local"), (req, res) => {
+    const user = req.user as any;
+    res.json({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      createdAt: user.createdAt,
+    });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.logout(() => {
+      res.status(200).json({ message: "Logged out successfully" });
+    });
+  });
+
+  // Progress tracking routes
+  app.get("/api/progress", ensureAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    const progress = await storage.getProgress(user.id);
+    res.json(progress);
+  });
+
+  app.post("/api/progress/:conceptId", ensureAuthenticated, async (req, res) => {
+    const user = req.user as any;
+    const conceptId = Number(req.params.conceptId);
+    const parsed = insertProgressSchema.partial().safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid progress data" });
+    }
+
+    const concept = await storage.getRestConcept(conceptId);
+    if (!concept) {
+      return res.status(404).json({ message: "Concept not found" });
+    }
+
+    const progress = await storage.updateProgress(user.id, conceptId, parsed.data);
+    res.json(progress);
   });
 
   // Get REST concepts
