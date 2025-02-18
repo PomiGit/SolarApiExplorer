@@ -1,6 +1,6 @@
 import { planets, restConcepts, users, progress, quizQuestions, quizAttempts, type Planet, type InsertPlanet, type RestConcept, type InsertRestConcept, type User, type InsertUser, type Progress, type InsertProgress, type QuizQuestion, type InsertQuizQuestion, type QuizAttempt, type InsertQuizAttempt } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
 export interface IStorage {
@@ -25,7 +25,7 @@ export interface IStorage {
   updateProgress(userId: number, conceptId: number, data: Partial<InsertProgress>): Promise<Progress>;
   getProgressByConceptId(userId: number, conceptId: number): Promise<Progress | undefined>;
 
-  // New quiz operations
+  // Quiz operations
   getQuizQuestions(conceptId: number): Promise<QuizQuestion[]>;
   getQuizQuestion(id: number): Promise<QuizQuestion | undefined>;
   createQuizQuestion(question: InsertQuizQuestion): Promise<QuizQuestion>;
@@ -134,8 +134,12 @@ export class DatabaseStorage implements IStorage {
     const [userProgress] = await db
       .select()
       .from(progress)
-      .where(eq(progress.userId, userId))
-      .where(eq(progress.conceptId, conceptId));
+      .where(
+        and(
+          eq(progress.userId, userId),
+          eq(progress.conceptId, conceptId)
+        )
+      );
     return userProgress;
   }
 
@@ -180,7 +184,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(quizAttempts.userId, userId),
-          quizAttempts.questionId.in(questionIds)
+          inArray(quizAttempts.questionId, questionIds)
         )
       );
   }
