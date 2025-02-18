@@ -49,8 +49,12 @@ export function QuizModal({ concept, isOpen, onClose, onComplete }: QuizModalPro
   });
 
   const submitAnswer = useMutation({
-    mutationFn: async (data: { questionId: number; selectedAnswer: number }) => {
-      return apiRequest("POST", "/api/quiz/submit", data).then(res => res.json());
+    mutationFn: async ({ questionId, selectedAnswer }: { questionId: number; selectedAnswer: number }) => {
+      const res = await apiRequest("POST", "/api/quiz/submit", {
+        questionId,
+        selectedAnswer
+      });
+      return res.json();
     },
     onSuccess: (response) => {
       setIsCorrect(response.isCorrect);
@@ -76,7 +80,7 @@ export function QuizModal({ concept, isOpen, onClose, onComplete }: QuizModalPro
   });
 
   const handleSubmit = () => {
-    if (!selectedAnswer || !questions) return;
+    if (selectedAnswer === null || !questions) return;
 
     submitAnswer.mutate({
       questionId: questions[currentQuestion].id,

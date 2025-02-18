@@ -151,21 +151,22 @@ export async function registerRoutes(app: Express) {
 
   app.post("/api/quiz/submit", ensureAuthenticated, async (req, res) => {
     const user = req.user as any;
-    const parsed = insertQuizAttemptSchema.safeParse(req.body);
+    const { questionId, selectedAnswer } = req.body;
 
-    if (!parsed.success) {
+    if (typeof questionId !== 'number' || typeof selectedAnswer !== 'number') {
       return res.status(400).json({ message: "Invalid quiz attempt data" });
     }
 
-    const question = await storage.getQuizQuestion(parsed.data.questionId);
+    const question = await storage.getQuizQuestion(questionId);
     if (!question) {
       return res.status(404).json({ message: "Question not found" });
     }
 
-    const isCorrect = parsed.data.selectedAnswer === question.correctAnswer;
+    const isCorrect = selectedAnswer === question.correctAnswer;
     const attempt = await storage.submitQuizAttempt({
-      ...parsed.data,
       userId: user.id,
+      questionId,
+      selectedAnswer,
       isCorrect,
     });
 
